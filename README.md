@@ -1,86 +1,103 @@
-# Azure Template Repo README
+# Agentic Operations
 
-## Azure Developer CLIのセットアップ
+このリポジトリは、Azure 上で再現可能な 404 の障害シナリオを作成し、正常状態と障害状態の切り替え、復旧、検証を自動化するための実験用ワークロードです。
 
-以下のコマンドを実行して、Azure Developer CLI (azd) をインストールします。
+## 目的
 
-```bash
-curl -fsSL https://aka.ms/install-azd.sh | bash
+Milestone 1 では、Azure VM 上で NGINX を動かし、以下のライフサイクルを再現します。
+
+```text
+Deploy
+→ HTTP 200
+→ Inject routing failure
+→ HTTP 404
+→ Recover
+→ HTTP 200
 ```
 
-インストール方法は[公式ドキュメント](https://learn.microsoft.com/ja-jp/azure/developer/azure-developer-cli/install-azd)を参照してください。
+このリポジトリでは、AI による修復や Azure Monitor を有効化する前段として、障害が意図的に注入され、再現性と回復可能性を確認できる単一障害シナリオを作成します。
 
-### Azure Developer CLIの動作確認
+## 構成
 
-以下のコマンドでAzure Developer CLIのバージョンを確認します。
+- infra/: Bicep で定義する Azure インフラ
+- src/nginx/: healthy.conf と broken.conf を含む NGINX 設定
+- scenarios/vm-nginx-404/: VM + NGINX シナリオの詳細と証跡情報
+- scripts/: deploy, break, recover, verify, destroy
+- tests/smoke/: 実行可能な smoke test
 
-```bash
-azd version
-```
+## 主要シナリオ
 
-### Azure Developer CLIでログインする
+- vm-nginx-404: Azure Ubuntu VM 上の NGINX に対し、設定の誤りで /health が 404 になる仕組みを再現
 
-環境変数 `AZURE_TENANT_ID`が設定されている場合は、以下のコマンドでログインします。
+## 前提条件
 
-```bash
-azd auth login --tenant-id $AZURE_TENANT_ID
-```
-
-環境変数が設定されていない場合は、以下のコマンドでログインします。
-
-```bash
-azd auth login
-```
-
-## Azure CLIをセットアップする
-
-以下のコマンドを実行して、Azure CLIをインストールします。
+- Azure CLI がインストール済み
+- Azure サブスクリプションへログイン済み
+- SSH 公開鍵がローカル環境に存在する
+- 実行前に AZURE_RESOURCE_GROUP、AZURE_LOCATION、AZURE_VM_SSH_PUBLIC_KEY_PATH を必要に応じて設定
 
 ```bash
-curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+az login
+export AZURE_RESOURCE_GROUP=rg-agentic-ops-dev
+export AZURE_LOCATION=eastus
+export AZURE_VM_SSH_PUBLIC_KEY_PATH="$HOME/.ssh/id_rsa.pub"
 ```
 
-インストール方法は[公式ドキュメント](https://learn.microsoft.com/ja-jp/cli/azure/install-azure-cli-linux?pivots=apt)を参照してください。
-
-## Azure CLIでログインする
-
-環境変数 `AZURE_TENANT_ID`が設定されている場合は、以下のコマンドでログインします。
+## デプロイ
 
 ```bash
-az login --tenant $AZURE_TENANT_ID
+./scripts/deploy.sh vm-nginx-404
 ```
 
-### Azure CLIの動作確認
+デプロイ時に Azure VM とネットワークを作成し、NGINX をインストールして正常な構成へ設定します。
 
-以下のコマンドでAzure CLIのバージョンとアカウント情報を確認します。
+## 障害注入
 
 ```bash
-az version
-az account list
+./scripts/break.sh vm-nginx-404
 ```
 
-## GitHub Codespacesの設定
+本シナリオでは、NGINX サービス自体や VM 自体を止めず、Nginx の `location` 解決に失敗するような設定を置き換えることで 404 を再現します。
 
-`.env`でシークレットを管理する場合、以下のコマンドでCodespacesにシークレットを設定します。
+## 復旧
 
 ```bash
-gh secret set --app codespaces -f .env
+./scripts/recover.sh vm-nginx-404
 ```
 
-シークレットの一覧を確認するには、以下のコマンドを実行します。
+正常な設定を再配置し、`nginx -t` と `nginx -s reload` を実行して監視対象 URL を HTTP 200 に戻します。
+
+## 検証
 
 ```bash
-gh secret list --app codespaces
+./scripts/verify.sh vm-nginx-404 healthy
+./scripts/verify.sh vm-nginx-404 broken
 ```
 
-単一のシークレットを設定するには、以下のコマンドを使用します。
+- healthy: 期待値 200
+- broken: 期待値 404
+
+検証スクリプトは URL、期待ステータス、実際のステータス、PASS/FAIL を標準出力へ表示し、ズレがあれば非 0 で終了します。
+
+## 破棄
 
 ```bash
-gh secret set --app codespaces SECRET_NAME
+./scripts/destroy.sh vm-nginx-404
 ```
 
-シークレットの削除は以下のコマンドで行います。
+## 参考コスト情報
 
-```bash
-gh secret delete --app codespaces SECRET_NAME
-```
+Milestone 1 は Linux VM 1 台とネットワーク資源を利用します。開発用の最小 VM サイズと NSG を使うため、通常の開発環境のコストよりは低いですが、VM は停止していても Azure 料金が発生し得ます。リソースの削除は `destroy.sh` で実行してください。
+
+## 今回実装しない対象
+
+- Azure Functions
+- Azure Static Web Apps
+- Azure Monitor Alerts
+- Microsoft Foundry / Hosted Agent
+- 自動復旧
+- AI による原因分析
+
+## 監視対象URL
+
+監視対象は `http://<VM_PUBLIC_IP>/health` です。正常状態では `azure-agentic-ops nginx healthy` が本文に含まれます。

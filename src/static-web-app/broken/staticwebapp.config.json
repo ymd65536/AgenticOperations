@@ -1,0 +1,6 @@
+{
+  "navigationFallback": {
+    "rewrite": "/missing.html",
+    "exclude": ["/*.{css,js,png,gif,ico,jpg,svg}"]
+  }
+}

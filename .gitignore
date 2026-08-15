@@ -1,1 +1,7 @@
 .env
+.state/
+*.pem
+*.key
+*.crt
+*.pub
+.env
