@@ -73,7 +73,7 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         }
         {
           name: 'WEBSITE_CONTENTSHARE'
-          value: toLower(substring(replace(functionAppName, '-', ''), 0, 32))
+          value: toLower(take(replace(functionAppName, '-', ''), 32))
         }
         {
           name: 'FUNCTIONS_EXTENSION_VERSION'

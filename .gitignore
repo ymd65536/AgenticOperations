@@ -5,3 +5,6 @@
 *.crt
 *.pub
 .env
+bin
+obj
+.publish
