@@ -1,0 +1,146 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.41.2.15936",
+      "templateHash": "13006304351845981560"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for the alerting and recovery resources."
+      }
+    },
+    "vmResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "The Azure resource ID of the monitored VM."
+      }
+    },
+    "logicAppName": {
+      "type": "string",
+      "defaultValue": "[format('logic-vm-nginx-recover-{0}', uniqueString(resourceGroup().id))]",
+      "metadata": {
+        "description": "Name of the Logic App workflow."
+      }
+    },
+    "actionGroupName": {
+      "type": "string",
+      "defaultValue": "[format('ag-vm-nginx-{0}', uniqueString(resourceGroup().id))]",
+      "metadata": {
+        "description": "Name of the action group that sends the alert to the Logic App."
+      }
+    },
+    "logicAppTriggerUrl": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "The callback URL used by Azure Monitor to invoke the Logic App workflow. Leave blank to populate after deployment."
+      }
+    },
+    "foundryAgentUrl": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional URL for the Microsoft Foundry Hosted Agent fallback."
+      }
+    },
+    "foundryApiKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional token or API key for the Microsoft Foundry Hosted Agent fallback."
+      }
+    },
+    "monitoredUrl": {
+      "type": "string",
+      "defaultValue": "http://localhost/health",
+      "metadata": {
+        "description": "Monitored URL used by the recovery flow for diagnostics context."
+      }
+    }
+  },
+  "variables": {
+    "$fxv#0": "{\n  \"$schema\": \"https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#\",\n  \"contentVersion\": \"1.0.0.0\",\n  \"parameters\": {\n    \"vmResourceId\": {\n      \"type\": \"string\"\n    },\n    \"monitoredUrl\": {\n      \"type\": \"string\",\n      \"defaultValue\": \"http://localhost/health\"\n    },\n    \"foundryAgentUrl\": {\n      \"type\": \"string\",\n      \"defaultValue\": \"\"\n    },\n    \"foundryApiKey\": {\n      \"type\": \"securestring\",\n      \"defaultValue\": \"\"\n    }\n  },\n  \"triggers\": {\n    \"When_a_HTTP_request_is_received\": {\n      \"type\": \"Request\",\n      \"kind\": \"Http\",\n      \"inputs\": {\n        \"schema\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"data\": {\n              \"type\": \"object\",\n              \"properties\": {\n                \"alertContext\": {\n                  \"type\": \"object\",\n                  \"properties\": {\n                    \"properties\": {\n                      \"type\": \"object\",\n                      \"properties\": {\n                        \"monitoringService\": {\n                          \"type\": \"string\"\n                        }\n                      }\n                    }\n                  }\n                }\n              }\n            }\n          }\n        }\n      }\n    }\n  },\n  \"actions\": {\n    \"Recover_nginx_configuration\": {\n      \"type\": \"Http\",\n      \"inputs\": {\n        \"method\": \"POST\",\n        \"uri\": \"https://management.azure.com/@{parameters('vmResourceId')}/runCommand?api-version=2023-07-01\",\n        \"body\": {\n          \"commandId\": \"RunShellScript\",\n          \"script\": [\n            \"set -eux\",\n            \"cat > /tmp/healthy-nginx.conf <<'EOF'\",\n            \"server {\",\n            \"    listen 80 default_server;\",\n            \"    listen [::]:80 default_server;\",\n            \"    server_name _;\",\n            \"\",\n            \"    root /var/www/html;\",\n            \"    index index.html;\",\n            \"\",\n            \"    location = /health {\",\n            \"        default_type text/plain;\",\n            \"        try_files /index.html =404;\",\n            \"    }\",\n            \"\",\n            \"    location / {\",\n            \"        try_files $uri $uri/ =404;\",\n            \"    }\",\n            \"}\",\n            \"EOF\",\n            \"sudo install -m 0644 /dev/null /etc/nginx/conf.d/agentic-ops.conf\",\n            \"sudo cp /tmp/healthy-nginx.conf /etc/nginx/conf.d/agentic-ops.conf\",\n            \"sudo nginx -t\",\n            \"sudo nginx -s reload\",\n            \"curl -fsS http://127.0.0.1/health || (echo 'recovery check failed' && exit 1)\"\n          ]\n        },\n        \"authentication\": {\n          \"type\": \"ManagedServiceIdentity\"\n        }\n      },\n      \"runAfter\": {}\n    },\n    \"Get_recovery_status\": {\n      \"type\": \"Compose\",\n      \"inputs\": \"@string(outputs('Recover_nginx_configuration')?['statusCode'])\",\n      \"runAfter\": {\n        \"Recover_nginx_configuration\": [\n          \"Succeeded\"\n        ]\n      }\n    },\n    \"Get_recovery_result\": {\n      \"type\": \"Compose\",\n      \"inputs\": \"@string(body('Recover_nginx_configuration'))\",\n      \"runAfter\": {\n        \"Recover_nginx_configuration\": [\n          \"Succeeded\"\n        ]\n      }\n    },\n    \"If_recovery_succeeded\": {\n      \"type\": \"If\",\n      \"expression\": {\n        \"equals\": [\n          \"@outputs('Get_recovery_status')\",\n          \"200\"\n        ]\n      },\n      \"runAfter\": {\n        \"Get_recovery_status\": [\n          \"Succeeded\"\n        ]\n      },\n      \"actions\": {\n        \"Respond_success\": {\n          \"type\": \"Response\",\n          \"kind\": \"Http\",\n          \"inputs\": {\n            \"statusCode\": 200,\n            \"body\": {\n              \"status\": \"recovered\",\n              \"url\": \"@parameters('monitoredUrl')\",\n              \"message\": \"Recovered the VM NGINX configuration and validated HTTP 200.\"\n            }\n          }\n        }\n      },\n      \"else\": {\n        \"actions\": {\n          \"If_foundry_fallback_configured\": {\n            \"type\": \"If\",\n            \"expression\": {\n              \"and\": [\n                {\n                  \"not\": [\n                    {\n                      \"equals\": [\n                        \"@parameters('foundryAgentUrl')\",\n                        \"\"\n                      ]\n                    }\n                  ]\n                }\n              ]\n            },\n            \"actions\": {\n              \"Call_foundry_hosted_agent\": {\n                \"type\": \"Http\",\n                \"inputs\": {\n                  \"method\": \"POST\",\n                  \"uri\": \"@parameters('foundryAgentUrl')\",\n                  \"headers\": {\n                    \"Content-Type\": \"application/json\",\n                    \"Authorization\": \"Bearer @{parameters('foundryApiKey')}\"\n                  },\n                  \"body\": {\n                    \"scenario\": \"vm-nginx-404\",\n                    \"issue\": \"Nginx route is returning 404 after the Logic App recovery attempt.\",\n                    \"url\": \"@parameters('monitoredUrl')\",\n                    \"vmResourceId\": \"@parameters('vmResourceId')\",\n                    \"plan\": \"Check the active NGINX configuration, validate nginx -t, compare healthy and broken config, and instruct remediation if the auto-recovery script fails.\"\n                  }\n                }\n              }\n            },\n            \"else\": {\n              \"actions\": {\n                \"Respond_failure\": {\n                  \"type\": \"Response\",\n                  \"kind\": \"Http\",\n                  \"inputs\": {\n                    \"statusCode\": 500,\n                    \"body\": {\n                      \"status\": \"failed\",\n                      \"url\": \"@parameters('monitoredUrl')\",\n                      \"message\": \"Logic App recovery failed and no Foundry fallback endpoint was configured.\"\n                    }\n                  }\n                }\n              }\n            }\n          }\n        }\n      }\n    }\n  }\n}\n"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('logicAppName')]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": "[json(variables('$fxv#0'))]",
+        "parameters": {
+          "vmResourceId": {
+            "value": "[parameters('vmResourceId')]"
+          },
+          "monitoredUrl": {
+            "value": "[parameters('monitoredUrl')]"
+          },
+          "foundryAgentUrl": {
+            "value": "[parameters('foundryAgentUrl')]"
+          },
+          "foundryApiKey": {
+            "value": "[parameters('foundryApiKey')]"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/actionGroups",
+      "apiVersion": "2023-01-01",
+      "name": "[parameters('actionGroupName')]",
+      "location": "global",
+      "properties": {
+        "groupShortName": "nginx404",
+        "enabled": true,
+        "webhookReceivers": "[if(empty(parameters('logicAppTriggerUrl')), createArray(createObject('name', 'logic-app-recovery', 'serviceUri', listCallbackUrl(resourceId('Microsoft.Logic/workflows', parameters('logicAppName')), '2019-05-01').value, 'useCommonAlertSchema', true())), createArray(createObject('name', 'logic-app-recovery', 'serviceUri', parameters('logicAppTriggerUrl'), 'useCommonAlertSchema', true())))]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Logic/workflows', parameters('logicAppName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.Compute/virtualMachines', last(split(parameters('vmResourceId'), '/')))]",
+      "name": "[guid(resourceGroup().id, resourceId('Microsoft.Logic/workflows', parameters('logicAppName')), 'vm-run-command')]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]",
+        "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('logicAppName')), '2019-05-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Logic/workflows', parameters('logicAppName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "actionGroupResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Insights/actionGroups', parameters('actionGroupName'))]"
+    },
+    "logicAppResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('logicAppName'))]"
+    },
+    "alertResourceId": {
+      "type": "string",
+      "value": "[format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Insights/actionGroups/{2}', subscription().subscriptionId, resourceGroup().name, parameters('actionGroupName'))]"
+    },
+    "monitorUrl": {
+      "type": "string",
+      "value": "[parameters('monitoredUrl')]"
+    }
+  }
+}

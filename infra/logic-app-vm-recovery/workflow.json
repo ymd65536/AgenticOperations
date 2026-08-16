@@ -1,0 +1,198 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "vmResourceId": {
+      "type": "string"
+    },
+    "monitoredUrl": {
+      "type": "string",
+      "defaultValue": "http://localhost/health"
+    },
+    "foundryAgentUrl": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "foundryApiKey": {
+      "type": "securestring",
+      "defaultValue": ""
+    }
+  },
+  "triggers": {
+    "When_a_HTTP_request_is_received": {
+      "type": "Request",
+      "kind": "Http",
+      "inputs": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "properties": {
+                "alertContext": {
+                  "type": "object",
+                  "properties": {
+                    "properties": {
+                      "type": "object",
+                      "properties": {
+                        "monitoringService": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "actions": {
+    "Recover_nginx_configuration": {
+      "type": "Http",
+      "inputs": {
+        "method": "POST",
+        "uri": "https://management.azure.com/@{parameters('vmResourceId')}/runCommand?api-version=2023-07-01",
+        "body": {
+          "commandId": "RunShellScript",
+          "script": [
+            "set -eux",
+            "cat > /tmp/healthy-nginx.conf <<'EOF'",
+            "server {",
+            "    listen 80 default_server;",
+            "    listen [::]:80 default_server;",
+            "    server_name _;",
+            "",
+            "    root /var/www/html;",
+            "    index index.html;",
+            "",
+            "    location = /health {",
+            "        default_type text/plain;",
+            "        try_files /index.html =404;",
+            "    }",
+            "",
+            "    location / {",
+            "        try_files $uri $uri/ =404;",
+            "    }",
+            "}",
+            "EOF",
+            "sudo install -m 0644 /dev/null /etc/nginx/conf.d/agentic-ops.conf",
+            "sudo cp /tmp/healthy-nginx.conf /etc/nginx/conf.d/agentic-ops.conf",
+            "sudo nginx -t",
+            "sudo nginx -s reload",
+            "curl -fsS http://127.0.0.1/health || (echo 'recovery check failed' && exit 1)"
+          ]
+        },
+        "authentication": {
+          "type": "ManagedServiceIdentity"
+        }
+      },
+      "runAfter": {}
+    },
+    "Get_recovery_status": {
+      "type": "Compose",
+      "inputs": "@string(outputs('Recover_nginx_configuration')?['statusCode'])",
+      "runAfter": {
+        "Recover_nginx_configuration": [
+          "Succeeded"
+        ]
+      }
+    },
+    "Get_recovery_result": {
+      "type": "Compose",
+      "inputs": "@string(body('Recover_nginx_configuration'))",
+      "runAfter": {
+        "Recover_nginx_configuration": [
+          "Succeeded"
+        ]
+      }
+    },
+    "If_recovery_succeeded": {
+      "type": "If",
+      "expression": {
+        "equals": [
+          "@outputs('Get_recovery_status')",
+          "200"
+        ]
+      },
+      "runAfter": {
+        "Get_recovery_status": [
+          "Succeeded"
+        ]
+      },
+      "actions": {
+        "Respond_success": {
+          "type": "Response",
+          "kind": "Http",
+          "inputs": {
+            "statusCode": 200,
+            "body": {
+              "status": "recovered",
+              "url": "@parameters('monitoredUrl')",
+              "message": "Recovered the VM NGINX configuration and validated HTTP 200."
+            }
+          }
+        }
+      },
+      "else": {
+        "actions": {
+          "If_foundry_fallback_configured": {
+            "type": "If",
+            "expression": {
+              "and": [
+                {
+                  "not": [
+                    {
+                      "equals": [
+                        "@parameters('foundryAgentUrl')",
+                        ""
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "actions": {
+              "Call_foundry_hosted_agent": {
+                "type": "Http",
+                "inputs": {
+                  "method": "POST",
+                  "uri": "@parameters('foundryAgentUrl')",
+                  "headers": {
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer @{parameters('foundryApiKey')}"
+                  },
+                  "body": {
+                    "scenario": "vm-nginx-404",
+                    "issue": "Nginx route is returning 404 after the Logic App recovery attempt.",
+                    "url": "@parameters('monitoredUrl')",
+                    "vmResourceId": "@parameters('vmResourceId')",
+                    "plan": "Check the active NGINX configuration, validate nginx -t, compare healthy and broken config, and instruct remediation if the auto-recovery script fails."
+                  }
+                }
+              }
+            },
+            "else": {
+              "actions": {
+                "Respond_failure": {
+                  "type": "Response",
+                  "kind": "Http",
+                  "inputs": {
+                    "statusCode": 500,
+                    "body": {
+                      "status": "failed",
+                      "url": "@parameters('monitoredUrl')",
+                      "message": "Logic App recovery failed and no Foundry fallback endpoint was configured."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
