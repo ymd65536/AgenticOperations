@@ -69,15 +69,52 @@ export AZURE_VM_SSH_PUBLIC_KEY_PATH="$HOME/.ssh/id_rsa.pub"
 
 ## 検証
 
+### 基本シナリオの検証
+
 ```bash
+./scripts/deploy.sh vm-nginx-404
 ./scripts/verify.sh vm-nginx-404 healthy
+./scripts/break.sh vm-nginx-404
 ./scripts/verify.sh vm-nginx-404 broken
+./scripts/recover.sh vm-nginx-404
+./scripts/verify.sh vm-nginx-404 healthy
 ```
 
 - healthy: 期待値 200
 - broken: 期待値 404
 
 検証スクリプトは URL、期待ステータス、実際のステータス、PASS/FAIL を標準出力へ表示し、ズレがあれば非 0 で終了します。
+
+### Logic App 経由の検証
+
+```bash
+./scripts/deploy-alert-recovery.sh vm-nginx-404
+./scripts/break.sh vm-nginx-404
+./scripts/verify.sh vm-nginx-404 broken
+
+LOGIC_APP_NAME='logic-vm-nginx-recover-1786875930'
+CALLBACK_URL=$(az rest \
+  --method post \
+  --uri "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/rg-agentic-ops-dev/providers/Microsoft.Logic/workflows/${LOGIC_APP_NAME}/triggers/When_a_HTTP_request_is_received/listCallbackUrl?api-version=2019-05-01" \
+  --query value -o tsv)
+
+curl -sS -D - -X POST "$CALLBACK_URL" \
+  -H 'Content-Type: application/json' \
+  -d '{"data":{"alertContext":{"properties":{"monitoringService":"cron-health-check","statusCode":404,"url":"http://20.120.113.228/health"}}}}'
+```
+
+このテストでは、VM 側で 404 を検知した後に Logic App の callback URL を呼ぶと、回復フローが実行され、応答として以下を返します。
+
+```json
+{"status":"recovered","url":"http://20.120.113.228/health","message":"Recovered the VM NGINX configuration and validated HTTP 200."}
+```
+
+この実行後、回復状態を確認するには:
+
+```bash
+bash scripts/recover-vm-alert.sh vm-nginx-404
+./scripts/verify.sh vm-nginx-404 healthy
+```
 
 ## 破棄
 
