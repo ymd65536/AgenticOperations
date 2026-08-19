@@ -1,0 +1,25 @@
+{
+  "incidentId": "inc-nginx-404-001",
+  "status": "Resolved",
+  "observedStatus": 404,
+  "finalStatus": 200,
+  "rootCause": {
+    "summary": "NGINX routing configuration for /health does not map to the expected content",
+    "confidence": 0.94
+  },
+  "evidence": [
+    "nginx service is active",
+    "request /health returns 404",
+    "active location configuration does not point to expected health content"
+  ],
+  "actions": [
+    "updated health route configuration",
+    "validated nginx configuration",
+    "reloaded nginx"
+  ],
+  "verification": {
+    "url": "http://127.0.0.1/health",
+    "httpStatus": 200,
+    "success": true
+  }
+}

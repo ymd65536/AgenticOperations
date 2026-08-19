@@ -16,6 +16,8 @@ Do not implement AI agents, Microsoft Foundry integration, remediation agents, r
 
 A separate system will later monitor and remediate these workloads.
 
+The initial milestone for deterministic lifecycle and rule-based recovery is complete. The next explicit milestone is a Microsoft Foundry Hosted Agent demonstration that investigates a deterministic HTTP 404, selects a safe remediation via allowed tools, validates the change, and verifies recovery without arbitrary shell operations.
+
 ## Primary objective
 
 Each workload must provide a deterministic lifecycle:

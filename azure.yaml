@@ -1,0 +1,8 @@
+name: agentic-ops-hosted-agent
+metadata:
+  template: agentic-ops-hosted-agent@0.0.1
+services:
+  hosted-agent:
+    project: ./src/hosted-agent
+    language: python
+    host: containerapp

@@ -126,14 +126,25 @@ bash scripts/recover-vm-alert.sh vm-nginx-404
 
 Milestone 1 は Linux VM 1 台とネットワーク資源を利用します。開発用の最小 VM サイズと NSG を使うため、通常の開発環境のコストよりは低いですが、VM は停止していても Azure 料金が発生し得ます。リソースの削除は `destroy.sh` で実行してください。
 
+## Hosted Agent の追加実装
+
+このリポジトリは、既存のルールベース復旧の比較対象として、Microsoft Foundry Hosted Agent 用の安全なデモを追加します。
+
+- 目的: HTTP 404 の事実だけを受け取り、状況確認・証拠収集・原因推定・許可された設定変更・検証まで自律的に進める
+- Agent 名: service-recovery-agent
+- 方式: Hosted Agent / Tool Registry / allow-list による制御
+- 実装場所: src/hosted_agent, prompts/service-recovery-agent.system.md, scripts/run-agent-demo.sh
+- 既存の break.sh / recover.sh / verify.sh / Logic App recovery は維持して比較可能な状態にする
+
 ## 今回実装しない対象
 
 - Azure Functions
 - Azure Static Web Apps
 - Azure Monitor Alerts
-- Microsoft Foundry / Hosted Agent
-- 自動復旧
-- AI による原因分析
+- AI による AGENTS.md 変更
+- 任意Shell実行
+- 本番環境対応
+- 人間承認UI
 
 ## 監視対象URL
 

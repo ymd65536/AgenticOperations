@@ -1,0 +1,12 @@
+{
+  "incidentId": "inc-nginx-404-001",
+  "scenario": "vm-nginx-404",
+  "target": {
+    "type": "azure-vm",
+    "url": "http://127.0.0.1/health"
+  },
+  "expectedStatus": 200,
+  "observedStatus": 404,
+  "agentName": "service-recovery-agent",
+  "modelDeployment": "gpt-4o-mini"
+}
