@@ -33,9 +33,87 @@ apt-get install -y nginx
 rm -f /etc/nginx/sites-enabled/default /etc/nginx/sites-available/default
 mkdir -p /var/www/html /var/www/empty
 cat > /var/www/html/index.html <<'EOF'
-<html>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agent Recovery - NGINX</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 2rem auto;
+        max-width: 880px;
+        line-height: 1.6;
+        color: #0f172a;
+        background: #f8fafc;
+      }
+      .card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+        padding: 2rem;
+      }
+      h1 {
+        color: #0f766e;
+      }
+      .status {
+        display: inline-block;
+        background: #dcfce7;
+        color: #166534;
+        font-weight: bold;
+        padding: 0.35rem 0.75rem;
+        border-radius: 999px;
+      }
+      code {
+        background: #e2e8f0;
+        padding: 0.15rem 0.35rem;
+        border-radius: 6px;
+      }
+      ol {
+        padding-left: 1.25rem;
+      }
+      .note {
+        margin-top: 1rem;
+        background: #ecfeff;
+        border-left: 4px solid #0891b2;
+        padding: 1rem;
+      }
+    </style>
+  </head>
   <body>
-    <h1>azure-agentic-ops nginx healthy</h1>
+    <div class="card">
+      <h1>Service recovery completed</h1>
+      <p class="status">HTTP 200 - Healthy</p>
+
+      <p>
+        The monitored endpoint previously returned <strong>HTTP 404</strong> because the
+        NGINX route for <code>/health</code> was pointing to a missing document root.
+        The broken configuration used a path such as <code>/var/www/does-not-exist</code>,
+        so NGINX could not resolve the requested health page and returned a routing error.
+      </p>
+
+      <h2>How the Hosted Agent recovered the service</h2>
+      <ol>
+        <li>Confirmed the HTTP 404 on the target URL.</li>
+        <li>Checked the NGINX service status and access/error logs.</li>
+        <li>Inspected the active configuration to find the incorrect root path.</li>
+        <li>Replaced the broken route with a valid health mapping to <code>/var/www/html</code>.</li>
+        <li>Validated the NGINX config with <code>nginx -t</code>.</li>
+        <li>Reloaded NGINX and re-probed the URL.</li>
+      </ol>
+
+      <div class="note">
+        <strong>Root cause:</strong> the config for <code>location = /health</code>
+        was pointing to a non-existent filesystem path, not that the VM or NGINX service itself was down.
+      </div>
+
+      <h2>Result</h2>
+      <p>
+        The recovery was successful. The health endpoint now resolves correctly and serves this page,
+        which documents the exact recovery procedure and verifies that the service is back to a healthy state.
+      </p>
+    </div>
   </body>
 </html>
 EOF

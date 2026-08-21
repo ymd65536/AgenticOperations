@@ -37,6 +37,13 @@ REMOTE_CONFIG="$REMOTE_CONFDIR/agentic-ops.conf"
 SSH_OPTS="$(ssh_opts)"
 
 scp $SSH_OPTS "$REPO_ROOT/src/nginx/healthy.conf" "$ADMIN_USERNAME@$VM_PUBLIC_IP:/tmp/healthy-nginx.conf"
-ssh $SSH_OPTS "$ADMIN_USERNAME@$VM_PUBLIC_IP" "sudo cp /tmp/healthy-nginx.conf $REMOTE_CONFIG && sudo nginx -t && sudo nginx -s reload"
+LATEST_PAGE_PATH="${REPO_ROOT}/.state/${SCENARIO_ID}.latest-recovery-page.html"
+if [[ -f "$LATEST_PAGE_PATH" ]]; then
+  scp $SSH_OPTS "$LATEST_PAGE_PATH" "$ADMIN_USERNAME@$VM_PUBLIC_IP:/tmp/${SCENARIO_ID}-latest-recovery-page.html"
+  ssh $SSH_OPTS "$ADMIN_USERNAME@$VM_PUBLIC_IP" "sudo cp /tmp/healthy-nginx.conf $REMOTE_CONFIG && sudo cp /tmp/${SCENARIO_ID}-latest-recovery-page.html /var/www/html/index.html && sudo nginx -t && sudo nginx -s reload"
+else
+  scp $SSH_OPTS "$REPO_ROOT/src/nginx/healthy-index.html" "$ADMIN_USERNAME@$VM_PUBLIC_IP:/tmp/healthy-index.html"
+  ssh $SSH_OPTS "$ADMIN_USERNAME@$VM_PUBLIC_IP" "sudo cp /tmp/healthy-nginx.conf $REMOTE_CONFIG && sudo cp /tmp/healthy-index.html /var/www/html/index.html && sudo nginx -t && sudo nginx -s reload"
+fi
 
 "$SCRIPT_DIR/verify.sh" "$SCENARIO_ID" healthy

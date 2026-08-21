@@ -22,7 +22,7 @@ Deploy
 - infra/: Bicep で定義する Azure インフラ
 - src/nginx/: healthy.conf と broken.conf を含む NGINX 設定
 - scenarios/vm-nginx-404/: VM + NGINX シナリオの詳細と証跡情報
-- scripts/: deploy, break, recover, verify, destroy
+- scripts/: deploy, break, recover, verify, destroy, hosted-agent-guidance-flow, remote-action-channel
 - tests/smoke/: 実行可能な smoke test
 
 ## 主要シナリオ
@@ -135,6 +135,38 @@ Milestone 1 は Linux VM 1 台とネットワーク資源を利用します。�
 - 方式: Hosted Agent / Tool Registry / allow-list による制御
 - 実装場所: src/hosted_agent, prompts/service-recovery-agent.system.md, scripts/run-agent-demo.sh
 - 既存の break.sh / recover.sh / verify.sh / Logic App recovery は維持して比較可能な状態にする
+
+### 安全な remote-action channel
+
+Azure Hosted Agent は直接 SSH で VM を制御しません。これは任意 shell 実行を避けるためです。代わりに、許可された操作だけを実行する `scripts/remote-action-channel.sh` を用意しています。
+
+```bash
+./scripts/remote-action-channel.sh inspect vm-nginx-404
+./scripts/remote-action-channel.sh repair vm-nginx-404
+./scripts/remote-action-channel.sh verify vm-nginx-404
+```
+
+この channel は、以下に限定されます。
+
+- `nginx -t` による設定検証
+- `nginx -s reload` によるリロード
+- 承認済み healthy config の配置
+- `curl` または `verify.sh` による確認
+
+### 一括フロー
+
+```bash
+./scripts/hosted-agent-guidance-flow.sh vm-nginx-404
+```
+
+このスクリプトは以下を自動で実行します。
+
+1. 正常状態に戻す
+2. VM を破壊して 404 にする
+3. Hosted Agent にガイダンスを依頼する
+4. 安全な remote-action channel で修復する
+5. HTTP 200 を確認する
+
 
 ## 今回実装しない対象
 

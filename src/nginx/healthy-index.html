@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hosted Agent 復旧記録</title>
+    <style>
+      :root {
+        --bg: #f4f7fb;
+        --card: #ffffff;
+        --line: #dfe7f5;
+        --text: #172033;
+        --muted: #4b5d7a;
+        --good: #1f9d61;
+        --good-bg: #eafaf2;
+        --warn: #a16207;
+        --warn-bg: #fff7dc;
+        --info: #0f6cbd;
+        --info-bg: #eaf4ff;
+        --shadow: rgba(23, 32, 51, 0.12);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+        background: linear-gradient(180deg, #eef5ff 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+      .container {
+        max-width: 1100px;
+        margin: 32px auto;
+        padding: 0 20px 40px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: 0 12px 28px var(--shadow);
+        overflow: hidden;
+      }
+      .header {
+        background: linear-gradient(135deg, #0f766e, #0ea5a4 55%, #38bdf8);
+        color: white;
+        padding: 28px 32px;
+      }
+      .header h1 {
+        margin: 0 0 10px;
+        font-size: clamp(1.8rem, 3vw, 2.6rem);
+      }
+      .badge {
+        display: inline-block;
+        background: rgba(255,255,255,0.18);
+        border: 1px solid rgba(255,255,255,0.35);
+        border-radius: 999px;
+        padding: 8px 16px;
+        font-weight: 700;
+      }
+      .body {
+        padding: 28px 32px 36px;
+      }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--good-bg);
+        border: 1px solid #b7ebc9;
+        color: var(--good);
+        padding: 10px 16px;
+        border-radius: 999px;
+        font-weight: 800;
+      }
+      .section {
+        margin-top: 28px;
+      }
+      .section h2 {
+        font-size: 1.2rem;
+        margin-bottom: 12px;
+      }
+      .grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+      .meta {
+        background: #f8fafc;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 14px 16px;
+      }
+      .meta .label {
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+      .meta strong {
+        display: block;
+        margin-top: 6px;
+        font-size: 1.05rem;
+      }
+      ol {
+        margin: 0;
+        padding-left: 22px;
+      }
+      li {
+        margin: 10px 0;
+        line-height: 1.7;
+      }
+      .note {
+        background: var(--info-bg);
+        border-left: 5px solid var(--info);
+        border-radius: 10px;
+        padding: 14px 16px;
+        color: #093d6d;
+      }
+      .log {
+        background: #0f172a;
+        color: #e2e8f0;
+        border-radius: 12px;
+        padding: 16px;
+        overflow-x: auto;
+        font-size: 0.92rem;
+        line-height: 1.6;
+      }
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      code {
+        font-family: "SFMono-Regular", Consolas, monospace;
+        background: rgba(148,163,184,0.15);
+        border-radius: 6px;
+        padding: 2px 6px;
+      }
+      .footer {
+        margin-top: 24px;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="card">
+        <div class="header">
+          <div class="badge">Hosted Agent 復旧記録</div>
+          <h1>NGINX 404 の復旧を完了しました</h1>
+        </div>
+        <div class="body">
+          <div class="status">● HTTP 200 - 正常状態</div>
+
+          <div class="section">
+            <h2>今回の状況</h2>
+            <div class="grid">
+              <div class="meta">
+                <div class="label">対象URL</div>
+                <strong><code>http://20.106.237.102/health</code></strong>
+              </div>
+              <div class="meta">
+                <div class="label">症状</div>
+                <strong>HTTP 404</strong>
+              </div>
+              <div class="meta">
+                <div class="label">復旧結果</div>
+                <strong>HTTP 200</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>根本原因</h2>
+            <div class="note">
+              <strong>原因:</strong> NGINX の <code>location = /health</code> が存在しないディレクトリを参照しており、健康チェック用のコンテンツが解決できませんでした。<br />
+              つまり、VM や NGINX サービス自体が停止しているのではなく、<strong>ルーティング先のファイルシステム設定が破損していた</strong>ため 404 になっていました。
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>この復旧の実際の手順</h2>
+            <ol>
+              <li>対象の URL に対して <strong>HTTP 404</strong> を確認した</li>
+              <li>NGINX のサービス状態とアクセスログ、エラーログを確認した</li>
+              <li>現在の設定ファイルを見て、<code>/health</code> のルート先が不正であることを特定した</li>
+              <li><code>/var/www/html</code> に対して正しいヘルスページを再設定した</li>
+              <li><code>nginx -t</code> で構成の妥当性を検証した</li>
+              <li><code>nginx -s reload</code> で設定を反映し、再度 URL を確認した</li>
+              <li>最終的に <strong>HTTP 200</strong> へ回復した</li>
+            </ol>
+          </div>
+
+          <div class="section">
+            <h2>そのときの Hosted Agent の実行ログ</h2>
+            <div class="log">
+              <pre>このページには、直近の Hosted Agent 実行時に実際に行われた復旧手順と結果をそのまま残します。
+復旧のたびに内容が変わるため、ここには最新の実行ログを保持します。</pre>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>直近の復旧結果</h2>
+            <div class="log">
+              <pre>最新の復旧ログは .state 配下の生成ページで保持されています。
+このページは安全な状態の可視化用ダッシュボードとして表示されます。
+復旧のたびに状況が変わるため、直近の結果は別の生成済み HTML に記録されます。</pre>
+            </div>
+          </div>
+
+          <div class="footer">
+            このページは NGINX の回復状態を可視化するための説明ページです。<br />
+            復旧ごとに計画や手順が異なるため、最新のログは別途生成済みの復旧記録ページに残しています。
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
