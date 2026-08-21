@@ -167,6 +167,39 @@ Azure Hosted Agent は直接 SSH で VM を制御しません。これは任意 
 4. 安全な remote-action channel で修復する
 5. HTTP 200 を確認する
 
+### Hosted Agent を単体で実行する方法
+
+Hosted Agent を直接呼ぶ場合は、エージェント定義がある [foundry-agent-demo/azure.yaml](foundry-agent-demo/azure.yaml) のディレクトリで実行してください。
+
+```bash
+cd /Users/ymd65536/Desktop/AgenticOperations/foundry-agent-demo
+azd ai agent show
+azd ai agent invoke "Investigate the vm-nginx-404 incident on the VM at 20.106.237.102. The broken URL is http://20.106.237.102/health and it currently returns 404. I authorize only safe read-only investigation and only the following remediation actions: nginx -t, nginx -s reload, copy the approved healthy config into /etc/nginx/conf.d/agentic-ops.conf, and verify via curl or ./scripts/verify.sh. Do not use arbitrary shell commands. Summarize the root cause, list the exact safe steps, and explain the expected HTTP 200 verification result." --no-prompt
+```
+
+もしリポジトリ直下で `azd ai agent invoke` を実行すると、以下のように `azure.ai.agent service` を解決できず失敗します。
+
+```text
+ERROR: could not resolve agent service in azd project: no azure.ai.agent service found in azure.yaml
+```
+
+### Hosted Agent から Azure VM へ直接接続できるか
+
+このリポジトリでの現在の実運用では、Hosted Agent は直接 VM へ SSH して任意のシェル操作を実行できません。現時点では:
+
+- 事象の分析
+- 原因の説明
+- 安全な修復手順の提示
+- 承認済み操作のガイダンス
+
+までは可能ですが、VM へ直接 SSH でログインして自由に操作することはサポートされていません。
+
+安全な代替手段は、Hosted Agent が提示した手順に基づいてローカルまたは制限付き remote-action channel 経由で修復することです。
+
+```bash
+./scripts/remote-action-channel.sh repair vm-nginx-404
+./scripts/verify.sh vm-nginx-404 healthy
+```
 
 ## 今回実装しない対象
 
