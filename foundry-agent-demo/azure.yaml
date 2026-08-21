@@ -9,15 +9,15 @@ services:
         project: ""
         host: azure.ai.project
         language: ""
-        endpoint: https://ai-account-rttl3zvneaqhm.services.ai.azure.com/api/projects/ai-project-agenticops-demo
+        endpoint: ${AZURE_AI_PROJECT_ENDPOINT}
         deployments:
-            - name: gpt-4o-mini
+            - name: ${AZURE_AI_MODEL_DEPLOYMENT_NAME}
               model:
                   format: OpenAI
-                  name: gpt-4o-mini
-                  version: '2024-07-18'
+                  name: ${AZURE_AI_MODEL_DEPLOYMENT_NAME}
+                  version: '2025-08-07'
               sku:
-                  name: GlobalStandard
+                  name: Standard
                   capacity: 1
     service-recovery-agent:
         project: ./src/hosted-agent
@@ -41,6 +41,8 @@ services:
         environmentVariables:
             - name: AZURE_AI_MODEL_DEPLOYMENT_NAME
               value: ${AZURE_AI_MODEL_DEPLOYMENT_NAME}
+            - name: HTTP_PROBE_ENDPOINT
+              value: ${HTTP_PROBE_ENDPOINT}
 infra:
     provider: bicep
     path: ./infra

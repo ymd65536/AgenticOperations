@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
+import urllib.error
+import urllib.parse
+import urllib.request
 from typing import Any, Dict, List
 
 
@@ -74,11 +78,84 @@ class ToolRegistry:
 
         raise ValueError(f"Tool '{tool_name}' is not implemented.")
 
+    def _resolve_live_url(self, url: str, scenario_id: str = "vm-nginx-404") -> str:
+        if not isinstance(url, str) or not url.startswith(("http://", "https://")):
+            return url
+
+        state_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", ".state", f"{scenario_id}.env")
+        )
+        public_ip = None
+        if os.path.exists(state_path):
+            with open(state_path, "r", encoding="utf-8") as env_file:
+                for line in env_file:
+                    if line.startswith("VM_PUBLIC_IP="):
+                        public_ip = line.split("=", 1)[1].strip()
+                        break
+
+        if not public_ip:
+            return url
+
+        parsed = urllib.parse.urlsplit(url)
+        if parsed.hostname and parsed.hostname != public_ip:
+            replacement_url = parsed._replace(netloc=public_ip, path=parsed.path or "/health")
+            return urllib.parse.urlunsplit(replacement_url)
+        return url
+
+    def _probe_http_via_relay(self, url: str, relay_url: str) -> Dict[str, Any]:
+        payload = json.dumps({"url": url}).encode("utf-8")
+        request = urllib.request.Request(
+            relay_url,
+            data=payload,
+            method="POST",
+            headers={"Content-Type": "application/json", "User-Agent": "agentic-ops-hosted-agent/1.0"},
+        )
+
+        try:
+            with urllib.request.urlopen(request, timeout=15) as response:
+                data = json.loads(response.read().decode("utf-8", errors="replace"))
+                return {
+                    "url": data.get("url", url),
+                    "status": int(data.get("status", 503)),
+                    "body": data.get("body", ""),
+                    "relay": relay_url,
+                }
+        except urllib.error.HTTPError as exc:
+            body = exc.read(4096).decode("utf-8", errors="replace")
+            try:
+                data = json.loads(body)
+                return {"url": data.get("url", url), "status": int(data.get("status", exc.code)), "body": data.get("body", body), "relay": relay_url}
+            except Exception:
+                return {"url": url, "status": int(exc.code), "body": body, "relay": relay_url}
+        except Exception as exc:  # pragma: no cover - network and endpoint specific behavior
+            return {"url": url, "status": 503, "body": f"probe_error: {exc}", "error": str(exc), "relay": relay_url}
+
     def _probe_http(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        url = payload.get("url", "http://127.0.0.1/health")
-        status = payload.get("status", 404)
-        body = payload.get("body", "not found")
-        return {"url": url, "status": status, "body": body}
+        scenario_id = payload.get("scenario_id") or payload.get("scenario") or "vm-nginx-404"
+        url = self._resolve_live_url(payload.get("url", "http://127.0.0.1/health"), scenario_id=scenario_id)
+        if not isinstance(url, str) or not url.startswith(("http://", "https://")):
+            raise ValueError("Probe URL must be a valid http or https URL.")
+
+        relay_url = os.environ.get("HTTP_PROBE_ENDPOINT")
+        if relay_url:
+            return self._probe_http_via_relay(url, relay_url)
+
+        request = urllib.request.Request(
+            url,
+            method="GET",
+            headers={"User-Agent": "agentic-ops-hosted-agent/1.0"},
+        )
+
+        try:
+            with urllib.request.urlopen(request, timeout=10) as response:
+                status = int(response.getcode())
+                body = response.read(4096).decode("utf-8", errors="replace")
+                return {"url": url, "status": status, "body": body}
+        except urllib.error.HTTPError as exc:
+            body = exc.read(4096).decode("utf-8", errors="replace")
+            return {"url": url, "status": int(exc.code), "body": body}
+        except Exception as exc:  # pragma: no cover - network and endpoint specific behavior
+            return {"url": url, "status": 503, "body": f"probe_error: {exc}", "error": str(exc)}
 
     def _update_nginx_health_route(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         if not isinstance(payload, dict):
