@@ -211,11 +211,11 @@ Hosted Agent が外部公開済みのエンドポイントに到達できるか�
 ```bash
 cp .env_sample .env
 
-VM_PUBLIC_IP=$(grep '^VM_PUBLIC_IP=' .state/vm-nginx-404.env | cut -d= -f2-)
-./scripts/start-http-probe-relay.sh
+VM_PUBLIC_IP=$(grep '^VM_PUBLIC_IP=' .state/vm-nginx-404.env | cut -d= -f2-) && echo "VM_PUBLIC_IP=${VM_PUBLIC_IP}"
+curl_result=`curl http://${VM_PUBLIC_IP}/health` && echo $curl_result
 
 cd foundry-agent-demo
-azd ai agent invoke "対象の URL は http://${VM_PUBLIC_IP}/health です。HTTP only の read-only 確認だけを行い、SSH や設定変更はしないでください。ステータスコード、応答内容、原因候補を日本語で簡潔に示してください。" --no-prompt
+azd ai agent invoke "nginxを導入されたAzure VMにアクセスしました。アクセス先は http://${VM_PUBLIC_IP}/healthです。 curlでアクセスした結果は${curl_result} でした。ステータスコード、応答内容、原因候補を日本語で簡潔に示し、GitHub Copilot向けに修正のためのプロンプトを考えて生成してください。" --no-prompt
 ```
 
 実際の接続方式は環境ごとに異なりますが、リポジトリの方針は一貫しています。Hosted Agent は診断と提案に限定し、修復や再読み込みは承認済みのローカル操作や安全な channel に委ねます。
