@@ -6,6 +6,7 @@ source "$SCRIPT_DIR/common.sh"
 
 SCENARIO_ID="${1:-$DEFAULT_SCENARIO_ID}"
 load_state "$SCENARIO_ID"
+RESOURCE_GROUP="${AZURE_RESOURCE_GROUP:-${RESOURCE_GROUP:-$DEFAULT_RESOURCE_GROUP}}"
 
 if [[ "$SCENARIO_ID" == "functions-route-404" ]]; then
   if [[ -z "${FUNCTION_APP_NAME:-}" ]]; then

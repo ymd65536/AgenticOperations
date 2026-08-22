@@ -7,6 +7,7 @@ source "$SCRIPT_DIR/common.sh"
 SCENARIO_ID="${1:-$DEFAULT_SCENARIO_ID}"
 EXPECTED_STATE="${2:-healthy}"
 load_state "$SCENARIO_ID"
+RESOURCE_GROUP="${AZURE_RESOURCE_GROUP:-${RESOURCE_GROUP:-$DEFAULT_RESOURCE_GROUP}}"
 
 if [[ "$SCENARIO_ID" != "functions-route-404" && -n "${VM_NAME:-}" ]]; then
   VM_PUBLIC_IP="$(get_vm_public_ip "${RESOURCE_GROUP:-$DEFAULT_RESOURCE_GROUP}" "$VM_NAME")"

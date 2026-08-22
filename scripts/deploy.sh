@@ -11,6 +11,11 @@ LOCATION="${AZURE_LOCATION:-$DEFAULT_LOCATION}"
 ADMIN_USERNAME="${AZURE_VM_ADMIN_USERNAME:-$DEFAULT_ADMIN_USERNAME}"
 VM_NAME="${AZURE_VM_NAME:-$DEFAULT_VM_NAME}"
 
+# Prefer the active environment/default RG over any stale values saved in .state.
+if [[ -n "${RESOURCE_GROUP:-}" ]]; then
+  RESOURCE_GROUP="$RESOURCE_GROUP"
+fi
+
 require_command az
 
 if [[ "$SCENARIO_ID" == "functions-route-404" ]]; then
