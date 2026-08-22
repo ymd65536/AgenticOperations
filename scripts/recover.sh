@@ -21,10 +21,29 @@ if [[ "$SCENARIO_ID" == "functions-route-404" ]]; then
   exit 0
 fi
 
-if [[ -z "${VM_PUBLIC_IP:-}" ]]; then
+if [[ -z "${VM_NAME:-}" ]]; then
   echo "The deployment state for $SCENARIO_ID is missing. Run ./scripts/deploy.sh $SCENARIO_ID first." >&2
   exit 1
 fi
+
+VM_PUBLIC_IP="$(get_vm_public_ip "${RESOURCE_GROUP:-$DEFAULT_RESOURCE_GROUP}" "$VM_NAME")"
+if [[ -z "$VM_PUBLIC_IP" ]]; then
+  echo "Unable to resolve the current public IP for VM $VM_NAME in resource group ${RESOURCE_GROUP:-$DEFAULT_RESOURCE_GROUP}." >&2
+  exit 1
+fi
+
+MONITORED_URL="http://${VM_PUBLIC_IP}/health"
+
+cat > "$(get_state_path "$SCENARIO_ID")" <<EOF
+SCENARIO_ID=$SCENARIO_ID
+RESOURCE_GROUP=${RESOURCE_GROUP:-${AZURE_RESOURCE_GROUP:-$DEFAULT_RESOURCE_GROUP}}
+LOCATION=${LOCATION:-${AZURE_LOCATION:-$DEFAULT_LOCATION}}
+ADMIN_USERNAME=${ADMIN_USERNAME:-${AZURE_VM_ADMIN_USERNAME:-$DEFAULT_ADMIN_USERNAME}}
+VM_NAME=$VM_NAME
+VM_PUBLIC_IP=$VM_PUBLIC_IP
+MONITORED_URL=$MONITORED_URL
+SCENARIO_TYPE=vm
+EOF
 
 SSH_PRIVATE_KEY_PATH="${AZURE_VM_SSH_PRIVATE_KEY_PATH:-${HOME}/.ssh/id_rsa}"
 if [[ ! -f "$SSH_PRIVATE_KEY_PATH" ]]; then

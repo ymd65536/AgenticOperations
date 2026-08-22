@@ -8,6 +8,23 @@ SCENARIO_ID="${1:-$DEFAULT_SCENARIO_ID}"
 EXPECTED_STATE="${2:-healthy}"
 load_state "$SCENARIO_ID"
 
+if [[ "$SCENARIO_ID" != "functions-route-404" && -n "${VM_NAME:-}" ]]; then
+  VM_PUBLIC_IP="$(get_vm_public_ip "${RESOURCE_GROUP:-$DEFAULT_RESOURCE_GROUP}" "$VM_NAME")"
+  if [[ -n "$VM_PUBLIC_IP" ]]; then
+    MONITORED_URL="http://${VM_PUBLIC_IP}/health"
+    cat > "$(get_state_path "$SCENARIO_ID")" <<EOF
+SCENARIO_ID=$SCENARIO_ID
+RESOURCE_GROUP=${RESOURCE_GROUP:-${AZURE_RESOURCE_GROUP:-$DEFAULT_RESOURCE_GROUP}}
+LOCATION=${LOCATION:-${AZURE_LOCATION:-$DEFAULT_LOCATION}}
+ADMIN_USERNAME=${ADMIN_USERNAME:-${AZURE_VM_ADMIN_USERNAME:-$DEFAULT_ADMIN_USERNAME}}
+VM_NAME=$VM_NAME
+VM_PUBLIC_IP=$VM_PUBLIC_IP
+MONITORED_URL=$MONITORED_URL
+SCENARIO_TYPE=vm
+EOF
+  fi
+fi
+
 if [[ -z "${MONITORED_URL:-}" ]]; then
   echo "Scenario state is missing for $SCENARIO_ID. Run ./scripts/deploy.sh $SCENARIO_ID first." >&2
   exit 1

@@ -47,6 +47,45 @@ get_vm_public_ip() {
   az vm show -g "$resource_group" -n "$vm_name" --show-details --query "publicIps" -o tsv 2>/dev/null || true
 }
 
+refresh_vm_state() {
+  local scenario_id="${1:-$DEFAULT_SCENARIO_ID}"
+  local state_file
+  state_file="$(get_state_path "$scenario_id")"
+
+  if [[ ! -f "$state_file" ]]; then
+    return 1
+  fi
+
+  source "$state_file"
+
+  if [[ -z "${VM_NAME:-}" ]]; then
+    return 1
+  fi
+
+  local current_ip
+  current_ip="$(get_vm_public_ip "${RESOURCE_GROUP:-$DEFAULT_RESOURCE_GROUP}" "$VM_NAME")"
+  if [[ -z "$current_ip" ]]; then
+    return 1
+  fi
+
+  VM_PUBLIC_IP="$current_ip"
+  MONITORED_URL="http://${current_ip}/health"
+
+  cat > "$state_file" <<EOF
+SCENARIO_ID=${SCENARIO_ID:-$scenario_id}
+RESOURCE_GROUP=${RESOURCE_GROUP:-${AZURE_RESOURCE_GROUP:-$DEFAULT_RESOURCE_GROUP}}
+LOCATION=${LOCATION:-${AZURE_LOCATION:-$DEFAULT_LOCATION}}
+ADMIN_USERNAME=${ADMIN_USERNAME:-${AZURE_VM_ADMIN_USERNAME:-$DEFAULT_ADMIN_USERNAME}}
+VM_NAME=${VM_NAME}
+VM_PUBLIC_IP=${VM_PUBLIC_IP}
+MONITORED_URL=${MONITORED_URL}
+SCENARIO_TYPE=vm
+EOF
+
+  export VM_PUBLIC_IP MONITORED_URL
+  return 0
+}
+
 resolve_url() {
   local scenario_id="${1:-$DEFAULT_SCENARIO_ID}"
   local state_file
@@ -54,14 +93,29 @@ resolve_url() {
   if [[ -f "$state_file" ]]; then
     source "$state_file"
   fi
+
+  if [[ "$scenario_id" == "functions-route-404" ]]; then
+    if [[ -n "${FUNCTION_APP_NAME:-}" ]]; then
+      echo "https://${FUNCTION_APP_NAME}.azurewebsites.net/api/products"
+    else
+      echo "https://${FUNCTION_APP_NAME:-localhost}/api/products"
+    fi
+    return 0
+  fi
+
+  if [[ -n "${VM_NAME:-}" ]]; then
+    local current_ip
+    current_ip="$(get_vm_public_ip "${RESOURCE_GROUP:-$DEFAULT_RESOURCE_GROUP}" "$VM_NAME")"
+    if [[ -n "$current_ip" ]]; then
+      echo "http://${current_ip}/health"
+      return 0
+    fi
+  fi
+
   if [[ -n "${MONITORED_URL:-}" ]]; then
     echo "$MONITORED_URL"
   else
-    if [[ "$scenario_id" == "functions-route-404" ]]; then
-      echo "https://${FUNCTION_APP_NAME:-localhost}/api/products"
-    else
-      echo "http://${VM_PUBLIC_IP:-127.0.0.1}/health"
-    fi
+    echo "http://${VM_PUBLIC_IP:-127.0.0.1}/health"
   fi
 }
 
