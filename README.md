@@ -38,7 +38,7 @@ Deploy
 
 ```bash
 az login
-export AZURE_RESOURCE_GROUP=rg-agentic-ops-dev
+export AZURE_RESOURCE_GROUP=rg-agenticops-demo
 export AZURE_LOCATION=eastus
 export AZURE_VM_SSH_PUBLIC_KEY_PATH="$HOME/.ssh/id_rsa.pub"
 ```

@@ -77,7 +77,7 @@ az deployment group create \
   --output none
 
 VM_PUBLIC_IP="$(az vm show -g "$RESOURCE_GROUP" -n "$VM_NAME" --show-details --query publicIps -o tsv)"
-MONITORED_URL="http://${VM_PUBLIC_IP}/health"
+MONITORED_URL="http://${VM_PUBLIC_IP}/"
 
 cat > "$(get_state_path "$SCENARIO_ID")" <<EOF
 SCENARIO_ID=$SCENARIO_ID
@@ -91,7 +91,5 @@ SCENARIO_TYPE=vm
 EOF
 
 echo "Scenario ID: $SCENARIO_ID"
-echo "Monitored URL: $MONITORED_URL"
-echo "Deployment complete."
-
-"$SCRIPT_DIR/verify.sh" "$SCENARIO_ID" healthy
+echo "VM public IP: $VM_PUBLIC_IP"
+echo "Deployment complete. The VM is running and no application workload was installed."

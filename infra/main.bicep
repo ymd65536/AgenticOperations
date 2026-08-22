@@ -28,7 +28,10 @@ var linuxImageVersion = 'latest'
 var configScript = '''
 set -eux
 export DEBIAN_FRONTEND=noninteractive
-apt-get update
+mkdir -p /var/lib/apt/lists/partial
+rm -rf /var/lib/apt/lists/*
+apt-get clean || true
+apt-get update -o Acquire::Retries=3 --fix-missing || apt-get update -o Acquire::Retries=5
 apt-get install -y nginx
 rm -f /etc/nginx/sites-enabled/default /etc/nginx/sites-available/default
 mkdir -p /var/www/html /var/www/empty
