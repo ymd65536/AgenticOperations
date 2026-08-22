@@ -28,10 +28,16 @@ var linuxImageVersion = 'latest'
 var configScript = '''
 set -eux
 export DEBIAN_FRONTEND=noninteractive
-mkdir -p /var/lib/apt/lists/partial
-rm -rf /var/lib/apt/lists/*
 apt-get clean || true
-apt-get update -o Acquire::Retries=3 --fix-missing || apt-get update -o Acquire::Retries=5
+rm -rf /var/lib/apt/lists/*
+mkdir -p /etc/apt/sources.list.d
+cat > /etc/apt/sources.list <<'EOF'
+deb http://archive.ubuntu.com/ubuntu jammy main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu jammy-backports main restricted universe multiverse
+deb http://security.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
+EOF
+apt-get update -o Acquire::Retries=5
 apt-get install -y nginx
 rm -f /etc/nginx/sites-enabled/default /etc/nginx/sites-available/default
 mkdir -p /var/www/html /var/www/empty
