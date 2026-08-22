@@ -17,8 +17,8 @@ services:
                   name: ${AZURE_AI_MODEL_DEPLOYMENT_NAME}
                   version: '2025-08-07'
               sku:
-                  name: Standard
-                  capacity: 1
+                  name: GlobalStandard
+                  capacity: 10
     service-recovery-agent:
         project: ./src/hosted-agent
         host: azure.ai.agent

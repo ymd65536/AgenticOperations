@@ -28,19 +28,15 @@ var linuxImageVersion = 'latest'
 var configScript = '''
 set -eux
 export DEBIAN_FRONTEND=noninteractive
-apt-get clean || true
-rm -rf /var/lib/apt/lists/*
-mkdir -p /etc/apt/sources.list.d
-cat > /etc/apt/sources.list <<'EOF'
-deb http://archive.ubuntu.com/ubuntu jammy main restricted universe multiverse
-deb http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
-deb http://archive.ubuntu.com/ubuntu jammy-backports main restricted universe multiverse
-deb http://security.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
-EOF
+
+cloud-init status --wait || true
+
 apt-get update -o Acquire::Retries=5
-apt-get install -y nginx
+apt-get install -y -o Acquire::Retries=5 nginx
+
 rm -f /etc/nginx/sites-enabled/default /etc/nginx/sites-available/default
 mkdir -p /var/www/html /var/www/empty
+
 cat > /var/www/html/index.html <<'EOF'
 <!DOCTYPE html>
 <html lang="en">
@@ -126,6 +122,7 @@ cat > /var/www/html/index.html <<'EOF'
   </body>
 </html>
 EOF
+
 mkdir -p /etc/nginx/conf.d
 cat > /etc/nginx/conf.d/agentic-ops.conf <<'EOF'
 server {
@@ -146,9 +143,11 @@ server {
     }
 }
 EOF
+
 nginx -t
 systemctl enable nginx
 systemctl restart nginx
+systemctl is-active --quiet nginx
 '''
 
 resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
